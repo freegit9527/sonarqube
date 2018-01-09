@@ -26,7 +26,6 @@ import org.sonar.api.utils.log.Loggers;
 import org.sonar.db.Database;
 import org.sonar.server.platform.db.migration.step.DataChange;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkState;
 
 /**
@@ -35,12 +34,12 @@ import static com.google.common.base.Preconditions.checkState;
  * uuids. These properties are then deleted.
  *
  * <p>
- * This migration ensures it can run but failing if:
+ * This migration ensures it can run by failing if:
  * <ul>
  *   <li>there is more than one organizations (because we can't populate the column for those extra organizations)</li>
- *   <li>the global default permission template can't be found (because an organization must have at least this default template)</li>
+ *   <li>the global default permission template can't be found (because an organization must have at least this default
+ *       template) or does not exist</li>
  * </ul>
- * </p>
  */
 public class PopulateDefaultPermTemplateColumnsOfOrganizations extends DataChange {
   private static final String DEFAULT_TEMPLATE_PROPERTY = "sonar.permission.template.default";
@@ -67,8 +66,17 @@ public class PopulateDefaultPermTemplateColumnsOfOrganizations extends DataChang
       // DB has just been created, default template of default organization will be populated by a startup task
       return;
     }
-    String projectDefaultTemplate = firstNonNull(defaultTemplateProperties.get(DEFAULT_PROJECT_TEMPLATE_PROPERTY), globalDefaultTemplate);
+    checkState(permissionTemplateExists(context, globalDefaultTemplate),
+      "Can not migrate DB, default permission template '%s' does not exist",
+      globalDefaultTemplate);
+    String projectDefaultTemplate = defaultTemplateProperties.get(DEFAULT_PROJECT_TEMPLATE_PROPERTY);
+    if (projectDefaultTemplate == null || !permissionTemplateExists(context, projectDefaultTemplate)) {
+      projectDefaultTemplate = globalDefaultTemplate;
+    }
     String viewDefaultTemplate = defaultTemplateProperties.get(DEFAULT_VIEW_TEMPLATE_PROPERTY);
+    if (!permissionTemplateExists(context, viewDefaultTemplate)) {
+      viewDefaultTemplate = null;
+    }
 
     Loggers.get(PopulateDefaultPermTemplateColumnsOfOrganizations.class)
       .debug("Setting default templates on default organization '{}': project='{}', view='{}'",
@@ -102,6 +110,16 @@ public class PopulateDefaultPermTemplateColumnsOfOrganizations extends DataChang
     checkState(otherOrganizationCount == 0,
       "Can not migrate DB if more than one organization exists. Remove all organizations but the default one which uuid is '%s'",
       defaultOrganizationUuid);
+  }
+
+  private static boolean permissionTemplateExists(Context context, String uuid) throws SQLException {
+    Integer templateCount = context.prepareSelect("select count(*) from permission_templates where kee = ?")
+      .setString(1, uuid)
+      .get(row -> row.getInt(1));
+    checkState(templateCount <= 1,
+      "Can not migrate DB if multiple entries exist for Permission template UUID '%s'. Remove duplicates",
+      uuid);
+    return templateCount == 1;
   }
 
   private static Map<String, String> retrieveDefaultTemplateProperties(Context context) throws SQLException {

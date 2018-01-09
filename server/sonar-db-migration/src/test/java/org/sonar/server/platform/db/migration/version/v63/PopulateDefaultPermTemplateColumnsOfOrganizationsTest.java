@@ -86,9 +86,21 @@ public class PopulateDefaultPermTemplateColumnsOfOrganizationsTest {
   }
 
   @Test
+  public void fails_with_ISE_if_global_default_template_does_not_exist() throws SQLException {
+    setupDefaultOrganization();
+    insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
+
+    expectedException.expect(IllegalStateException.class);
+    expectedException.expectMessage("Can not migrate DB, default permission template 'foo' does not exist");
+
+    underTest.execute();
+  }
+
+  @Test
   public void execute_sets_project_perm_template_when_global_default_template_is_defined_in_property() throws SQLException {
     setupDefaultOrganization();
     insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
+    insertTemplate("foo");
 
     underTest.execute();
 
@@ -97,10 +109,25 @@ public class PopulateDefaultPermTemplateColumnsOfOrganizationsTest {
   }
 
   @Test
-  public void execute_sets_project_perm_template_from_project_default_template_property_over_global_property() throws SQLException {
+  public void execute_sets_project_perm_template_from_global_property_if_project_default_template_property_over_does_not_exist() throws SQLException {
     setupDefaultOrganization();
     insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
     insertProperty(DEFAULT_PROJECT_TEMPLATE_PROPERTY, "bar");
+    insertTemplate("foo");
+
+    underTest.execute();
+
+    verifyTemplateColumns("foo", null);
+    verifyPropertiesDoNotExist();
+  }
+
+  @Test
+  public void execute_sets_project_perm_template_from_project_default_template_property_over_global_property_if_former_exists() throws SQLException {
+    setupDefaultOrganization();
+    insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
+    insertProperty(DEFAULT_PROJECT_TEMPLATE_PROPERTY, "bar");
+    insertTemplate("foo");
+    insertTemplate("bar");
 
     underTest.execute();
 
@@ -109,10 +136,12 @@ public class PopulateDefaultPermTemplateColumnsOfOrganizationsTest {
   }
 
   @Test
-  public void execute_sets_project_perm_template_from_global_property_and_view_perm_template_from_view_property() throws SQLException {
+  public void execute_sets_project_perm_template_from_global_property_and_view_perm_template_from_view_property_if_exists() throws SQLException {
     setupDefaultOrganization();
     insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
     insertProperty(DEFAULT_VIEW_TEMPLATE_PROPERTY, "bar");
+    insertTemplate("foo");
+    insertTemplate("bar");
 
     underTest.execute();
 
@@ -121,11 +150,27 @@ public class PopulateDefaultPermTemplateColumnsOfOrganizationsTest {
   }
 
   @Test
-  public void execute_sets_project_from_project_property_and_view_from_view_property_when_all_properties_are_defined() throws SQLException {
+  public void execute_sets_project_perm_template_from_global_property_and_ignores_view_perm_template_from_view_property_if_does_not_exist() throws SQLException {
+    setupDefaultOrganization();
+    insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
+    insertProperty(DEFAULT_VIEW_TEMPLATE_PROPERTY, "bar");
+    insertTemplate("foo");
+
+    underTest.execute();
+
+    verifyTemplateColumns("foo", null);
+    verifyPropertiesDoNotExist();
+  }
+
+  @Test
+  public void execute_sets_project_from_project_property_and_view_from_view_property_when_all_template_exist() throws SQLException {
     setupDefaultOrganization();
     insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
     insertProperty(DEFAULT_PROJECT_TEMPLATE_PROPERTY, "bar");
     insertProperty(DEFAULT_VIEW_TEMPLATE_PROPERTY, "doh");
+    insertTemplate("foo");
+    insertTemplate("bar");
+    insertTemplate("doh");
 
     underTest.execute();
 
@@ -138,6 +183,45 @@ public class PopulateDefaultPermTemplateColumnsOfOrganizationsTest {
     setupDefaultOrganization();
     insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
     insertProperty(DEFAULT_DEV_TEMPLATE_PROPERTY, "bar");
+    insertTemplate("foo");
+    insertTemplate("bar");
+
+    underTest.execute();
+
+    verifyPropertiesDoNotExist();
+  }
+
+  @Test
+  public void execute_deletes_dev_property_when_it_is_defined_even_if_template_does_not_exist() throws SQLException {
+    setupDefaultOrganization();
+    insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
+    insertProperty(DEFAULT_DEV_TEMPLATE_PROPERTY, "bar");
+    insertTemplate("foo");
+
+    underTest.execute();
+
+    verifyPropertiesDoNotExist();
+  }
+
+  @Test
+  public void execute_deletes_view_property_when_it_is_defined() throws SQLException {
+    setupDefaultOrganization();
+    insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
+    insertProperty(DEFAULT_VIEW_TEMPLATE_PROPERTY, "bar");
+    insertTemplate("foo");
+    insertTemplate("bar");
+
+    underTest.execute();
+
+    verifyPropertiesDoNotExist();
+  }
+
+  @Test
+  public void execute_deletes_view_property_when_it_is_defined_even_if_template_does_not_exist() throws SQLException {
+    setupDefaultOrganization();
+    insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
+    insertProperty(DEFAULT_VIEW_TEMPLATE_PROPERTY, "bar");
+    insertTemplate("foo");
 
     underTest.execute();
 
@@ -169,6 +253,7 @@ public class PopulateDefaultPermTemplateColumnsOfOrganizationsTest {
   public void migration_is_reentrant() throws SQLException {
     setupDefaultOrganization();
     insertProperty(DEFAULT_TEMPLATE_PROPERTY, "foo");
+    insertTemplate("foo");
 
     underTest.execute();
 
@@ -204,5 +289,13 @@ public class PopulateDefaultPermTemplateColumnsOfOrganizationsTest {
       "PROP_KEY", key,
       "IS_EMPTY", String.valueOf(value == null),
       "TEXT_VALUE", value);
+  }
+
+  private void insertTemplate(String uuid) {
+    dbTester.executeInsert(
+      "PERMISSION_TEMPLATES",
+      "KEE", uuid,
+      "NAME", "name_" + uuid
+    );
   }
 }
