@@ -47,7 +47,7 @@ public class StaticResourcesServlet extends HttpServlet {
   private static final long serialVersionUID = -2577454614650178426L;
 
   @Override
-  public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+  public void doGet(HttpServletRequest request, HttpServletResponse response) {
     String pluginKey = getPluginKey(request);
     String resource = getResourcePath(request);
     InputStream in = null;

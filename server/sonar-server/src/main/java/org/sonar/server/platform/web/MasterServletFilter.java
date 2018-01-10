@@ -64,7 +64,7 @@ public class MasterServletFilter implements Filter {
     initFilters(filters);
   }
 
-  public void initFilters(List<ServletFilter> filterExtensions) throws ServletException {
+  public void initFilters(List<ServletFilter> filterExtensions) {
     List<ServletFilter> filterList = Lists.newArrayList();
     for (ServletFilter extension : filterExtensions) {
       try {

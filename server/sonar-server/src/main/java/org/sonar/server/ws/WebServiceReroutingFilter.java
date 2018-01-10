@@ -55,7 +55,7 @@ public class WebServiceReroutingFilter extends ServletFilter {
   }
 
   @Override
-  public void doFilter(javax.servlet.ServletRequest servletRequest, javax.servlet.ServletResponse servletResponse, FilterChain chain) throws IOException, ServletException {
+  public void doFilter(javax.servlet.ServletRequest servletRequest, javax.servlet.ServletResponse servletResponse, FilterChain chain) {
     HttpServletRequest httpRequest = (HttpServletRequest) servletRequest;
     RedirectionRequest wsRequest = new RedirectionRequest(httpRequest);
     ServletResponse wsResponse = new ServletResponse((HttpServletResponse) servletResponse);
@@ -64,7 +64,7 @@ public class WebServiceReroutingFilter extends ServletFilter {
   }
 
   @Override
-  public void init(FilterConfig filterConfig) throws ServletException {
+  public void init(FilterConfig filterConfig) {
     // Nothing to do
   }
 
