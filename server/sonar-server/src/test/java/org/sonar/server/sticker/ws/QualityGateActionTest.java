@@ -19,17 +19,52 @@
  */
 package org.sonar.server.sticker.ws;
 
+import org.apache.commons.io.IOUtils;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.sonar.api.measures.CoreMetrics;
+import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.server.ws.WebService.Param;
+import org.sonar.db.DbTester;
+import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.ResourceTypesRule;
+import org.sonar.db.metric.MetricDto;
+import org.sonar.server.component.ComponentFinder;
+import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ws.WsActionTester;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 public class QualityGateActionTest {
 
-  private WsActionTester ws = new WsActionTester(new QualityGateAction());
+  @Rule
+  public ExpectedException expectedException = ExpectedException.none();
+  @Rule
+  public UserSessionRule userSession = UserSessionRule.standalone();
+  @Rule
+  public DbTester db = DbTester.create();
+
+  private ResourceTypesRule resourceTypes = new ResourceTypesRule().setRootQualifiers(Qualifiers.PROJECT);
+
+  private WsActionTester ws = new WsActionTester(new QualityGateAction(userSession, db.getDbClient(), new ComponentFinder(db.getDbClient(), resourceTypes)));
+
+  @Test
+  public void generate_passing_svg() {
+    ComponentDto project = db.components().insertPublicProject();
+    userSession.registerComponents(project);
+    MetricDto qualityGateMetric = db.measures().insertMetric(m -> m.setKey(CoreMetrics.ALERT_STATUS_KEY));
+    db.measures().insertLiveMeasure(project, qualityGateMetric, m -> m.setData("OK"));
+
+    String response = ws.newRequest()
+      .setParam("component", project.getKey())
+      .execute().getInput();
+
+    assertResponseIsQualityGatePassing(response);
+  }
 
   @Test
   public void test_definition() {
@@ -52,5 +87,13 @@ public class QualityGateActionTest {
     String response = ws.newRequest().execute().getInput();
 
     assertThat(response).isEqualTo(ws.getDef().responseExampleAsString());
+  }
+
+  private void assertResponseIsQualityGatePassing(String response) {
+    try {
+      assertThat(response).isEqualTo(IOUtils.toString(getClass().getResource("quality_gate-passing.svg").toURI().toURL(), UTF_8));
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
   }
 }
